@@ -9,14 +9,14 @@
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
 button,input{font:inherit}.topbar{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,var(--navy2),var(--navy));color:#fff;border-bottom:3px solid var(--gold);padding:10px 16px;box-shadow:0 6px 22px rgba(15,43,64,.18)}
 .topinner{max-width:1120px;margin:auto;display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:12px;min-width:270px}
-.brandmark{width:48px;height:48px;border-radius:14px;background:#fff;display:grid;place-items:center;overflow:hidden;box-shadow:0 6px 15px rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.55)}.brandmark img{width:100%;height:100%;object-fit:contain;display:block;background:#fff}
+.brand{display:flex;align-items:center;gap:14px;min-width:360px}.brandlogo-link{display:flex;align-items:center;background:#fff;border-radius:12px;padding:7px 10px;box-shadow:0 6px 15px rgba(0,0,0,.16)}.brandlogo{width:230px;height:auto;display:block}
+
 .brandtext{display:flex;flex-direction:column;line-height:1.05}
-.brandsite{font-weight:900;font-size:17px;letter-spacing:.1px}
+
 .title{font-weight:800;font-size:14px;color:#dceaf1;margin-top:5px}
 .source{font-size:11px;color:#bcd0dc;margin-top:3px}
 .brandlink{color:#fff;text-decoration:none}
-.brandlink:hover .brandsite{text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:4px}
+.brandlogo-link:hover{transform:translateY(-1px)}
 .stats{display:flex;gap:7px;font-size:12px;flex-wrap:wrap}.pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.20);padding:6px 10px;border-radius:999px;color:#fff;backdrop-filter:blur(3px)}.goalpill{border-color:rgba(215,166,74,.75);background:rgba(215,166,74,.16)}.jump{display:flex;gap:6px;align-items:center}.jump input{width:76px;padding:7px;border:1px solid rgba(255,255,255,.25);border-radius:9px;background:#fff;color:var(--text)}.jump button,.smallbtn{padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}.jump button:hover,.smallbtn:hover{background:rgba(255,255,255,.20)}
 .quiz{max-width:1040px;margin:auto;padding:14px}.qcard,.checkpoint{min-height:calc(100vh - 96px);scroll-margin-top:96px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px;margin:0 0 20px;box-shadow:var(--shadow);display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
 .qcard:before,.checkpoint:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(var(--teal),var(--gold))}
@@ -31,7 +31,7 @@ button,input{font:inherit}.topbar{position:sticky;top:0;z-index:20;background:li
 .examQuestion{font-size:21px;line-height:1.4;font-weight:750;margin:14px 0 18px}.examChoice{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:13px 15px;margin:9px 0;cursor:pointer;line-height:1.4}.examChoice:hover{border-color:#9fb4f1;background:#f8faff}.examChoice.selected{border-color:var(--accent);background:#eef3ff}.examNav{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:18px}.qgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin:18px 0}.qdot{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 0;cursor:pointer}.qdot.answered{background:#eaf0ff;border-color:#9fb4f1}.qdot.current{outline:2px solid var(--accent)}
 .filetools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.filelabel{padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:13px}.filelabel input{display:none}.examResult{display:none}.resultHero{text-align:center;padding:12px}.resultScore{font-size:46px;font-weight:900;margin:5px 0}.pass{color:var(--ok)}.fail{color:var(--bad)}.resultRule{max-width:720px;margin:12px auto;padding:12px;border-radius:12px;background:var(--warnbg);border:1px solid #ead18a}.wrongList{display:grid;gap:10px;margin-top:18px}.wrongItem{border:1px solid #efc0ba;background:#fff8f7;border-radius:13px;padding:12px 14px;line-height:1.45}.wrongItem summary{cursor:pointer;font-weight:750}.wrongDetail{padding-top:8px}.statusBadge{font-size:12px;padding:5px 9px;border-radius:999px;background:#eef2f7;color:#43506a}.closeExam{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 10px;cursor:pointer}
 @media(max-width:700px){
-  .topbar{padding:8px 10px}.topinner{gap:9px}.brand{min-width:0;flex:1}.brandmark{width:42px;height:42px;border-radius:12px}.brandsite{font-size:15px}.title{font-size:12px}.source{display:none}
+  .topbar{padding:8px 10px}.topinner{gap:9px}.brand{min-width:0;flex:1;gap:9px}.brandlogo-link{padding:5px 7px;border-radius:10px}.brandlogo{width:170px}.title{font-size:11px}.source{display:none}.brandtext{min-width:110px}
   .question,.examQuestion{font-size:19px}.choice-label{font-size:16px}.qcard,.checkpoint,.examCard{padding:19px}.stats{display:none}.qgrid{grid-template-columns:repeat(6,1fr)}
   .filetools{width:100%;justify-content:flex-end}.jump{margin-left:auto}.quiz{padding:10px}
 }
@@ -41,14 +41,13 @@ button,input{font:inherit}.topbar{position:sticky;top:0;z-index:20;background:li
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ασφ. Πράκτορας">
-<link rel="apple-touch-icon" sizes="180x180" href="https://www.google.com/s2/favicons?domain=asfalistikos-symvoulos.gr&sz=180">
-<link rel="icon" type="image/png" href="https://www.google.com/s2/favicons?domain=asfalistikos-symvoulos.gr&sz=128">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-192.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 </head><body><div class="topbar"><div class="topinner"><div class="brand">
-<a class="brandlink" href="https://asfalistikos-symvoulos.gr/" target="_blank" rel="noopener" aria-label="Ασφαλιστικός Σύμβουλος">
-  <div class="brandmark"><img src="https://www.google.com/s2/favicons?domain=asfalistikos-symvoulos.gr&sz=128" alt="Ασφαλιστικός Σύμβουλος" width="48" height="48"></div>
+<a class="brandlink brandlogo-link" href="https://asfalistikos-symvoulos.gr/" target="_blank" rel="noopener" aria-label="Ασφαλιστικός Σύμβουλος">
+  <img class="brandlogo" src="logo4.svg" alt="Ασφαλιστικός Σύμβουλος">
 </a>
 <div class="brandtext">
-  <a class="brandlink" href="https://asfalistikos-symvoulos.gr/" target="_blank" rel="noopener"><span class="brandsite">Ασφαλιστικός Σύμβουλος</span></a>
   <span class="title">Ασφαλιστικός Πράκτορας — ΤτΕ 2024</span>
   <span class="source">600 επίσημες ερωτήσεις • Offline • Τράπεζα λαθών • Checkpoint 60</span>
 </div>
@@ -192,4 +191,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-<div id="buildMarker" style="display:none">build-logo-resume-v5</div></body></html>
+<div id="buildMarker" style="display:none">build-real-logo-v6</div></body></html>
