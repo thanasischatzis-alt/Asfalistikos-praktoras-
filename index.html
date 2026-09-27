@@ -150,28 +150,40 @@ function confirmCloseExam(){if(!exam.submitted&&Object.keys(exam.answers).length
 function closeExam(){document.getElementById('examOverlay').classList.remove('open');document.getElementById('examOverlay').setAttribute('aria-hidden','true');document.body.style.overflow='';}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('examOverlay').classList.contains('open'))confirmCloseExam();});
 restoreStudy();
-// Remember where the user stopped, even if they only scroll without answering.
+
+// RESUME FIX:
+// First jump to the saved question. Only AFTER that do we start observing scrolling.
+// Otherwise iPhone/PWA initially sees question 5 and can overwrite the saved position with 5.
+const _resumeQuestion=Math.max(5,Math.min(maxUnlocked(),parseInt(state.lastQuestion||5,10)||5));
+const _resumeEl=document.getElementById('q'+_resumeQuestion);
+if(_resumeEl){
+  requestAnimationFrame(()=>{
+    _resumeEl.scrollIntoView({behavior:'auto',block:'start'});
+    setTimeout(()=>_resumeEl.scrollIntoView({behavior:'auto',block:'start'}),120);
+  });
+}
+
 let _lastVisSave=0;
-const _observer=new IntersectionObserver((entries)=>{
-  const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>Math.abs(a.boundingClientRect.top)-Math.abs(b.boundingClientRect.top));
-  if(!visible.length) return;
-  const qn=parseInt(visible[0].target.dataset.q||'0',10);
-  if(qn>=5&&qn<=600){
-    state.lastQuestion=qn;
-    const now=Date.now();
-    if(now-_lastVisSave>500){save();_lastVisSave=now;}
-  }
-},{root:null,threshold:[0.25,0.55]});
-document.querySelectorAll('.qcard[data-q]').forEach(el=>_observer.observe(el));
+let _observer=null;
+setTimeout(()=>{
+  _observer=new IntersectionObserver((entries)=>{
+    const visible=entries
+      .filter(e=>e.isIntersecting)
+      .sort((a,b)=>Math.abs(a.boundingClientRect.top)-Math.abs(b.boundingClientRect.top));
+    if(!visible.length) return;
+    const qn=parseInt(visible[0].target.dataset.q||'0',10);
+    if(qn>=5&&qn<=600){
+      state.lastQuestion=qn;
+      const now=Date.now();
+      if(now-_lastVisSave>500){save();_lastVisSave=now;}
+    }
+  },{root:null,threshold:[0.25,0.55]});
+  document.querySelectorAll('.qcard[data-q]').forEach(el=>_observer.observe(el));
+},700);
+
 window.addEventListener('pagehide',()=>save());
 window.addEventListener('beforeunload',()=>save());
-
-// Resume automatically at the last question reached.
-setTimeout(()=>{
-  const n=Math.max(5,Math.min(maxUnlocked(),parseInt(state.lastQuestion||5,10)||5));
-  const el=document.getElementById('q'+n);
-  if(el) el.scrollIntoView({behavior:'auto',block:'start'});
-},180);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')save();});
 
 </script>
 <script>
@@ -179,4 +191,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-</body></html>
+<div id="buildMarker" style="display:none">build-resume-fix-v4</div></body></html>
