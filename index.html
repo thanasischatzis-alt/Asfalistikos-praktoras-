@@ -10,7 +10,7 @@
 button,input{font:inherit}.topbar{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,var(--navy2),var(--navy));color:#fff;border-bottom:3px solid var(--gold);padding:10px 16px;box-shadow:0 6px 22px rgba(15,43,64,.18)}
 .topinner{max-width:1120px;margin:auto;display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:12px;min-width:270px}
-.brandmark{width:48px;height:48px;border-radius:14px;background:linear-gradient(145deg,var(--gold),#f1c96d);display:grid;place-items:center;color:var(--navy2);font-weight:950;letter-spacing:-1px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35),0 6px 15px rgba(0,0,0,.18)}
+.brandmark{width:48px;height:48px;border-radius:14px;background:#fff;display:grid;place-items:center;overflow:hidden;box-shadow:0 6px 15px rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.55)}.brandmark img{width:100%;height:100%;object-fit:contain;display:block;background:#fff}
 .brandtext{display:flex;flex-direction:column;line-height:1.05}
 .brandsite{font-weight:900;font-size:17px;letter-spacing:.1px}
 .title{font-weight:800;font-size:14px;color:#dceaf1;margin-top:5px}
@@ -41,10 +41,11 @@ button,input{font:inherit}.topbar{position:sticky;top:0;z-index:20;background:li
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ασφ. Πράκτορας">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="https://www.google.com/s2/favicons?domain=asfalistikos-symvoulos.gr&sz=180">
+<link rel="icon" type="image/png" href="https://www.google.com/s2/favicons?domain=asfalistikos-symvoulos.gr&sz=128">
 </head><body><div class="topbar"><div class="topinner"><div class="brand">
 <a class="brandlink" href="https://asfalistikos-symvoulos.gr/" target="_blank" rel="noopener" aria-label="Ασφαλιστικός Σύμβουλος">
-  <div class="brandmark">ΑΣ</div>
+  <div class="brandmark"><img src="https://www.google.com/s2/favicons?domain=asfalistikos-symvoulos.gr&sz=128" alt="Ασφαλιστικός Σύμβουλος" width="48" height="48"></div>
 </a>
 <div class="brandtext">
   <a class="brandlink" href="https://asfalistikos-symvoulos.gr/" target="_blank" rel="noopener"><span class="brandsite">Ασφαλιστικός Σύμβουλος</span></a>
@@ -191,4 +192,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-<div id="buildMarker" style="display:none">build-resume-fix-v4</div></body></html>
+<div id="buildMarker" style="display:none">build-logo-resume-v5</div></body></html>
