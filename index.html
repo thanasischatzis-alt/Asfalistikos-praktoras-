@@ -518,7 +518,17 @@ let historyStudyBatchNums=[];
 let historyStudyBatchIndex=null;
 let historySessionBatches=[];
 let historySessionTotal=0;
+function sanitizeHistoryAgainstEasy(){
+  ensureState();
+  let changed=false;
+  Object.keys(state.easy||{}).forEach(k=>{
+    if(state.mistakeHistory&&state.mistakeHistory[k]){delete state.mistakeHistory[k];changed=true;}
+    if(state.mistakes&&state.mistakes[k]){delete state.mistakes[k];changed=true;}
+  });
+  return changed;
+}
 function allHistoricalMistakeNums(){
+  sanitizeHistoryAgainstEasy();
   return Object.keys(state.mistakeHistory||{}).map(Number).filter(n=>n>=1&&n<=600&&!state.easy[String(n)]).sort((a,b)=>a-b);
 }
 function buildHistorySessionBatches(){
@@ -610,7 +620,7 @@ function update(){
   document.getElementById('okc').textContent=ok;
   document.getElementById('badc').textContent=bad;
   document.getElementById('mistakec').textContent=Object.keys(state.mistakes||{}).length;
-  const hc=document.getElementById('historyMistakec');if(hc)hc.textContent=Object.keys(state.mistakeHistory||{}).length;
+  const hc=document.getElementById('historyMistakec');if(hc)hc.textContent=(typeof allHistoricalMistakeNums==='function'?allHistoricalMistakeNums().length:Object.keys(state.mistakeHistory||{}).length);
   document.getElementById('pct').textContent=t?Math.round(ok*100/t)+'%':'0%';
   updateProgressBars();
 }
@@ -620,7 +630,7 @@ function restoreStudy(){
   update();save();
   document.querySelectorAll('.checkpoint').forEach(cp=>refreshCheckpoint(parseInt(cp.dataset.block,10)));
 }
-function exportProgress(){const payload={app:'TtE Praktoras 2024',version:27,profile:ACTIVE_PROFILE,profileName:PROFILE_NAMES[ACTIVE_PROFILE],exportedAt:new Date().toISOString(),state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`TtE_Praktoras_${ACTIVE_PROFILE==='danae'?'Danae':'Thanasis'}_progress.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function exportProgress(){const payload={app:'TtE Praktoras 2024',version:28,profile:ACTIVE_PROFILE,profileName:PROFILE_NAMES[ACTIVE_PROFILE],exportedAt:new Date().toISOString(),state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`TtE_Praktoras_${ACTIVE_PROFILE==='danae'?'Danae':'Thanasis'}_progress.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function importProgress(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const s=p.state||p;if(!s||typeof s!=='object')throw new Error('invalid');state={passed:Array.isArray(s.passed)?s.passed:[],manualUnlocked:Array.isArray(s.manualUnlocked)?s.manualUnlocked:[],study:s.study||{},studyAttempts:(s.studyAttempts&&typeof s.studyAttempts==='object')?s.studyAttempts:{},mistakes:s.mistakes||{},mistakeHistory:(s.mistakeHistory&&typeof s.mistakeHistory==='object')?s.mistakeHistory:{},historyQueueV27Initialized:!!s.historyQueueV27Initialized,examHistory:Array.isArray(s.examHistory)?s.examHistory:[],easy:(s.easy&&typeof s.easy==='object')?s.easy:{},lastQuestion:clampQuestion(s.lastQuestion||1),lastQuestionTs:Number(s.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert(`Η πρόοδος εισήχθη στον χρήστη ${PROFILE_NAMES[ACTIVE_PROFILE]}. Θα γίνει ανανέωση.`);location.reload();}catch(e){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';}
 function checkpointUnlocked(block){
   const manual=Array.isArray(state.manualUnlocked)&&state.manualUnlocked.includes(block);
@@ -1256,13 +1266,13 @@ window.addEventListener('pageshow',()=>{
   function addReviewTools(){
     const panel=document.getElementById('toolsPanel');if(!panel||document.getElementById('reviewToolsV17'))return;
     const d=document.createElement('div');d.className='review-tools';d.id='reviewToolsV17';
-    d.innerHTML=`<div class="review-title">Γρήγορη επανάληψη</div><div class="review-buttons"><button class="review-btn" data-review="all" onclick="setReviewFilter('all')">Όλες</button><button class="review-btn" data-review="sosplus" onclick="setReviewFilter('sosplus')">🔴 SOS+ <span id="sosPlusCount"></span></button><button class="review-btn" data-review="sos" onclick="setReviewFilter('sos')">🟠 SOS <span id="sosCountV17"></span></button><button class="review-btn" data-review="mistakes" onclick="setReviewFilter('mistakes')">🧠 Προς κατάκτηση <span id="mistakesCountV17"></span></button><button class="review-btn" data-review="history" onclick="openHistoryMistakeBatches()">📚 Όλα τα ιστορικά λάθη <span id="historyMistakesCountV25"></span></button><button class="review-btn" data-review="easy" onclick="setReviewFilter('easy')">✅ Εύκολες <span id="easyCountV17"></span></button><button class="review-btn" onclick="goCurrentGlossary()">📘 Λεξιλόγιο ενότητας</button><button class="review-btn" onclick="goMasterGlossary()">📚 Όλοι οι όροι</button></div><div id="historyBatchPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft)"></div><div class="review-note">📚 Ιστορικά λάθη = η ενεργή λίστα βελτίωσης. Χωρίζεται σε πακέτα έως 60: π.χ. 193 → 60 + 60 + 60 + 13. Στην <b>Καθαρή Μελέτη</b>, το ✅ Εύκολη αφαιρεί την ερώτηση από τα Ιστορικά. Στο <b>Τεστ</b>, οι Εύκολες δεν μπαίνουν και κάθε σωστή απάντηση αφαιρείται από τα Ιστορικά. Έτσι στο τέλος μένουν μόνο όσα χρειάζονται ξανά.</div>`;
+    d.innerHTML=`<div class="review-title">Γρήγορη επανάληψη</div><div class="review-buttons"><button class="review-btn" data-review="all" onclick="setReviewFilter('all')">Όλες</button><button class="review-btn" data-review="sosplus" onclick="setReviewFilter('sosplus')">🔴 SOS+ <span id="sosPlusCount"></span></button><button class="review-btn" data-review="sos" onclick="setReviewFilter('sos')">🟠 SOS <span id="sosCountV17"></span></button><button class="review-btn" data-review="mistakes" onclick="setReviewFilter('mistakes')">🧠 Προς κατάκτηση <span id="mistakesCountV17"></span></button><button class="review-btn" data-review="history" onclick="openHistoryMistakeBatches()">📚 Όλα τα ιστορικά λάθη <span id="historyMistakesCountV25"></span></button><button class="review-btn" data-review="easy" onclick="setReviewFilter('easy')">✅ Εύκολες <span id="easyCountV17"></span></button><button class="review-btn" onclick="goCurrentGlossary()">📘 Λεξιλόγιο ενότητας</button><button class="review-btn" onclick="goMasterGlossary()">📚 Όλοι οι όροι</button></div><div id="historyBatchPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft)"></div><div class="review-note">📚 Ιστορικά λάθη = η ενεργή λίστα βελτίωσης. Χωρίζεται σε πακέτα έως 60: π.χ. 193 → 60 + 60 + 60 + 13. Στην <b>Καθαρή Μελέτη</b>, το ✅ Εύκολη αφαιρεί την ερώτηση αμέσως από τα Ιστορικά και από το επόμενο τεστ. Στο <b>Τεστ</b> μπαίνουν μόνο όσα απέμειναν, και κάθε σωστή απάντηση αφαιρείται οριστικά από τα Ιστορικά. Έτσι στο τέλος μένουν μόνο όσα χρειάζονται ξανά.</div>`;
     panel.appendChild(d);updateReviewUI();
   }
 
   function updateReviewUI(){
     ensureState();
-    const vals={sosPlusCount:SOSPLUS_NUMBERS.length,sosCountV17:SOS_NUMBERS.length,mistakesCountV17:Object.keys(state.mistakes||{}).length,historyMistakesCountV25:Object.keys(state.mistakeHistory||{}).length,easyCountV17:Object.keys(state.easy||{}).length};
+    const vals={sosPlusCount:SOSPLUS_NUMBERS.length,sosCountV17:SOS_NUMBERS.length,mistakesCountV17:Object.keys(state.mistakes||{}).length,historyMistakesCountV25:allHistoricalMistakeNums().length,easyCountV17:Object.keys(state.easy||{}).length};
     Object.entries(vals).forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent='('+v+')';});
     document.querySelectorAll('.review-btn[data-review]').forEach(b=>b.classList.toggle('active',b.dataset.review===reviewMode));
   }
@@ -1298,7 +1308,7 @@ window.addEventListener('pageshow',()=>{
     e.preventDefault();e.stopPropagation();const nums=categoryNums(reviewMode);const cur=parseInt(card.dataset.q,10);const idx=nums.indexOf(cur);const target=a.classList.contains('prevlink')?nums[idx-1]:nums[idx+1];if(target){persistLastQuestion(target);scrollToQuestion(target);}
   },true);
 
-  // v27: mastery workflow. A session starts with fixed groups of up to 60.
+  // v28: mastery workflow. Fixed batch snapshot; opening History again rebuilds fresh 60s from remaining items.
   // Easy/correct items disappear from the queue; each group's test uses only what remains.
   window.renderHistoryBatchPanel=function(){
     ensureState();
@@ -1326,11 +1336,15 @@ window.addEventListener('pageshow',()=>{
 
   window.openHistoryMistakeBatches=function(){
     ensureState();
+    sanitizeHistoryAgainstEasy();
     historyStudyBatchNums=[];historyStudyBatchIndex=null;
+    historySessionBatches=[];historySessionTotal=0;
     buildHistorySessionBatches();
     if(typeof toggleToolsPanel==='function')toggleToolsPanel(true);
-    renderHistoryBatchPanel();
     const panel=document.getElementById('historyBatchPanel');
+    if(panel)panel.style.display='block';
+    renderHistoryBatchPanel();
+    updateReviewUI();update();save();
     if(panel)setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),60);
   };
 
@@ -1370,9 +1384,10 @@ window.addEventListener('pageshow',()=>{
 
   window.startHistoryMistakeExam=function(batchIndex){
     ensureState();
+    sanitizeHistoryAgainstEasy();
     if(!historySessionBatches.length)buildHistorySessionBatches();
     batchIndex=parseInt(batchIndex,10)||0;
-    const nums=remainingHistoryBatchNums(batchIndex);
+    const nums=remainingHistoryBatchNums(batchIndex).filter(n=>!isEasy(n)&&!!state.mistakeHistory[String(n)]);
     const qs=nums.map(n=>QBYN[n]).filter(Boolean);
     if(!qs.length){
       const nextIdx=nextNonEmptyHistoryBatchIndex(batchIndex);
@@ -1381,9 +1396,9 @@ window.addEventListener('pageshow',()=>{
       return;
     }
     historyStudyBatchIndex=batchIndex;
-    exam={block:0,mode:'history',historyBatchIndex:batchIndex,historyTotal:historySessionTotal,qs:shuffle(qs),idx:0,answers:{},submitted:false,forced:new Set(nums),size:qs.length,easyCandidates:new Set()};
+    exam={block:0,mode:'history',historyBatchIndex:batchIndex,historyTotal:historySessionTotal,questionsSnapshot:nums.slice(),qs:shuffle(qs),idx:0,answers:{},submitted:false,forced:new Set(nums),size:qs.length,easyCandidates:new Set()};
     document.getElementById('examTitle').textContent=`🎯 ${historyBatchLabel(batchIndex,historySessionTotal)}`;
-    document.getElementById('examMeta').textContent=`${qs.length} ερωτήσεις • μόνο όσα απομένουν από αυτό το πακέτο • οι ✅ Εύκολες έχουν εξαιρεθεί • κάθε σωστή απάντηση αφαιρείται από τα Ιστορικά • χωρίς feedback μέχρι την υποβολή`;
+    document.getElementById('examMeta').textContent=`${qs.length} ερωτήσεις • ΜΟΝΟ όσα απέμειναν μετά την Καθαρή Μελέτη • καμία ✅ Εύκολη δεν μπαίνει • κάθε σωστή απάντηση διαγράφεται από τα Ιστορικά • χωρίς feedback μέχρι την υποβολή`;
     document.getElementById('examTake').style.display='block';document.getElementById('examResult').style.display='none';document.getElementById('examOverlay').classList.add('open');document.getElementById('examOverlay').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';renderExam();
   };
 
@@ -1412,11 +1427,13 @@ window.addEventListener('pageshow',()=>{
   function renderExamEasyControl(q){
     const take=document.getElementById('examTake'); if(!take||!q)return;
     let row=document.getElementById('examEasyRow');
+    if(exam.mode==='history'){if(row)row.style.display='none';return;}
     if(!row){
       row=document.createElement('div');row.id='examEasyRow';row.className='exam-easy-row';
       const progress=take.querySelector('.examProgress');
       if(progress&&progress.parentNode)progress.insertAdjacentElement('afterend',row);else take.insertBefore(row,take.firstChild);
     }
+    row.style.display='flex';
     const answered=!!exam.answers[q.n], selected=examEasyCandidateSet().has(q.n);
     row.innerHTML=`<button type="button" class="exam-easy-btn${selected?' active':''}" ${answered?'':'disabled'} onclick="toggleExamEasyCandidate(${q.n})">${selected?'✓ ':''}✅ Εύκολη — αν είναι σωστή</button><span class="exam-easy-help">${answered?'Θα αποθηκευτεί ως Εύκολη μόνο αν η απάντηση είναι σωστή στην υποβολή.':'Απάντησε πρώτα την ερώτηση.'}</span>`;
   }
@@ -1429,25 +1446,38 @@ window.addEventListener('pageshow',()=>{
   };
   window.moveExam=function(d){const ni=exam.idx+d;if(ni>=0&&ni<exam.qs.length){exam.idx=ni;renderExam();}};
   window.submitExam=function(){
-    const size=exam.qs.length;if(Object.keys(exam.answers).length<size){alert(`Απάντησε και στις ${size} ερωτήσεις πριν την υποβολή.`);return;}let correct=0,wrong=[];
+    const size=exam.qs.length;
+    if(Object.keys(exam.answers).length<size){alert(`Απάντησε και στις ${size} ερωτήσεις πριν την υποβολή.`);return;}
+    let correct=0,wrong=[],correctNums=[];
     const isHistoryExam=exam.mode==='history';
     let easyAccepted=0,easyRejected=0;const easyCandidates=examEasyCandidateSet();
+    const testedNums=exam.qs.map(q=>q.n);
     exam.qs.forEach(q=>{
       const a=exam.answers[q.n],k=String(q.n);
       if(a===q.correct){
-        correct++;
-        if(isHistoryExam)masterHistoryMistake(q.n);else if(state.mistakes[k])masterMistake(q.n);
-        if(easyCandidates.has(q.n)){
+        correct++;correctNums.push(q.n);
+        if(isHistoryExam){
+          delete state.mistakeHistory[k];
+          delete state.mistakes[k];
+        }else if(state.mistakes[k])masterMistake(q.n);
+        if(!isHistoryExam&&easyCandidates.has(q.n)){
           state.easy[k]={markedAt:Date.now(),source:'exam-correct'};
-          if(isHistoryExam)masterHistoryMistake(q.n);
           easyAccepted++;
         }
       }else{
-        wrong.push({q,a});bumpMistake(q.n,isHistoryExam?'history-exam':'exam');if(easyCandidates.has(q.n))easyRejected++;
+        wrong.push({q,a});
+        bumpMistake(q.n,isHistoryExam?'history-exam':'exam');
+        if(!isHistoryExam&&easyCandidates.has(q.n))easyRejected++;
       }
     });
+    if(isHistoryExam){
+      // Hard post-condition: every correct historical-test answer is gone; every wrong answer remains.
+      correctNums.forEach(n=>{const k=String(n);delete state.mistakeHistory[k];delete state.mistakes[k];});
+      wrong.forEach(({q})=>{const k=String(q.n);if(!state.mistakeHistory[k])state.mistakeHistory[k]={count:1,last:Date.now(),source:'history-exam'};});
+      sanitizeHistoryAgainstEasy();
+    }
     const pct=correct/size,pass=pct>=TARGET,officialPass=pct>=0.90;exam.submitted=true;
-    state.examHistory.push({block:exam.block,mode:exam.mode||'checkpoint',date:new Date().toISOString(),correct,total:size,wrong:wrong.map(x=>x.q.n),easyAccepted,easyRejected,pass});
+    state.examHistory.push({block:exam.block,mode:exam.mode||'checkpoint',historyBatchIndex:Number.isInteger(exam.historyBatchIndex)?exam.historyBatchIndex:null,date:new Date().toISOString(),questions:testedNums.slice(),correctQuestions:correctNums.slice(),correct,total:size,wrong:wrong.map(x=>x.q.n),easyAccepted,easyRejected,pass});
     if(state.examHistory.length>50)state.examHistory=state.examHistory.slice(-50);
     if(!isHistoryExam&&pass&&!state.passed.includes(exam.block)){state.passed.push(exam.block);state.passed.sort((a,b)=>a-b);}
     save();update();updateReviewUI();if(!isHistoryExam)refreshCheckpoint(exam.block);
@@ -1455,11 +1485,11 @@ window.addEventListener('pageshow',()=>{
     const hi=Number.isInteger(exam.historyBatchIndex)?exam.historyBatchIndex:0;
     const remainingCurrent=isHistoryExam?remainingHistoryBatchNums(hi).length:0;
     const nextIdx=isHistoryExam?nextNonEmptyHistoryBatchIndex(hi):null;
-    const historyNow=Object.keys(state.mistakeHistory||{}).filter(n=>!state.easy[n]).length;
+    const historyNow=allHistoricalMistakeNums().length;
     let rule=isHistoryExam
-      ?`Τεστ ιστορικών λαθών: ξεκίνησες με <b>${size}</b> ερωτήσεις από αυτό το πακέτο.<br><b>${correct}</b> σωστές αφαιρέθηκαν από τα Ιστορικά. Απομένουν στο ίδιο πακέτο <b>${remainingCurrent}</b>.<br>Συνολικά Ιστορικά που απομένουν: <b>${historyNow}</b>.`
+      ?`Τεστ ιστορικών λαθών: ξεκίνησες με <b>${size}</b> ερωτήσεις (οι Εύκολες είχαν ήδη αφαιρεθεί).<br><b>${correct}</b> σωστές διαγράφηκαν από τα Ιστορικά. Απομένουν στο ίδιο πακέτο <b>${remainingCurrent}</b>.<br>Συνολικά Ιστορικά που απομένουν: <b>${historyNow}</b>.`
       :`Επίσημο όριο ΤτΕ: <b>90%</b> — ${officialPass?'θα περνούσες':'δεν θα περνούσες ακόμη'}.<br>Δικός μας στόχος: <b>≥94%</b> — σε αυτό το τεστ χρειάζεσαι τουλάχιστον <b>${target}/${size}</b>.<br>Οι ήδη ✅ Εύκολες δεν συμμετείχαν.`;
-    let h=`<div class="resultHero"><div class="${pass?'pass':'fail'}" style="font-weight:850;font-size:22px">${isHistoryExam?(remainingCurrent===0?'✅ ΚΑΤΑΚΤΗΘΗΚΕ ΤΟ ΠΑΚΕΤΟ':'🎯 ΣΥΝΕΧΙΖΟΥΜΕ ΜΟΝΟ ΜΕ ΟΣΑ ΕΜΕΙΝΑΝ'):(pass?'✅ ΠΕΡΑΣΕΣ ΤΟ ΔΙΚΟ ΜΑΣ ΟΡΙΟ':'❌ ΘΕΛΕΙ ΕΠΑΝΑΛΗΨΗ')}</div><div class="resultScore ${pass?'pass':'fail'}">${correct}/${size}</div><div><b>${(pct*100).toFixed(1)}%</b> • Λάθη τεστ: ${size-correct} • Προς κατάκτηση: ${Object.keys(state.mistakes||{}).length} • Ιστορικά που απομένουν: ${historyNow}</div><div class="resultRule">${rule}<br><b>Νέες Εύκολες:</b> ${easyAccepted} αποθηκεύτηκαν${easyRejected?` • ${easyRejected} δεν αποθηκεύτηκαν επειδή απαντήθηκαν λάθος`:''}.</div></div>`;
+    let h=`<div class="resultHero"><div class="${pass?'pass':'fail'}" style="font-weight:850;font-size:22px">${isHistoryExam?(remainingCurrent===0?'✅ ΚΑΤΑΚΤΗΘΗΚΕ ΤΟ ΠΑΚΕΤΟ':'🎯 ΣΥΝΕΧΙΖΟΥΜΕ ΜΟΝΟ ΜΕ ΟΣΑ ΕΜΕΙΝΑΝ'):(pass?'✅ ΠΕΡΑΣΕΣ ΤΟ ΔΙΚΟ ΜΑΣ ΟΡΙΟ':'❌ ΘΕΛΕΙ ΕΠΑΝΑΛΗΨΗ')}</div><div class="resultScore ${pass?'pass':'fail'}">${correct}/${size}</div><div><b>${(pct*100).toFixed(1)}%</b> • Λάθη τεστ: ${size-correct} • Προς κατάκτηση: ${Object.keys(state.mistakes||{}).length} • Ιστορικά που απομένουν: ${historyNow}</div><div class="resultRule">${rule}${isHistoryExam?'':`<br><b>Νέες Εύκολες:</b> ${easyAccepted} αποθηκεύτηκαν${easyRejected?` • ${easyRejected} δεν αποθηκεύτηκαν επειδή απαντήθηκαν λάθος`:''}.`}</div></div>`;
     if(wrong.length){h+='<h3>Λάθη — πάτησε κάθε ερώτηση για εξήγηση</h3><div class="wrongList">';wrong.forEach(({q,a})=>{h+=`<details class="wrongItem"><summary>#${q.n} — ${esc(q.q)}</summary><div class="wrongDetail"><div><b>Η απάντησή σου:</b> ${a.toUpperCase()} — ${esc(q.options[a])}</div><div><b>Σωστή:</b> ${q.correct.toUpperCase()} — ${esc(q.options[q.correct])}</div><div class="why"><b>Γιατί:</b> ${esc(BETTER_EXPLANATIONS[q.n]||q.why)}</div></div></details>`;});h+='</div>';}
     if(isHistoryExam){
       h+='<div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:8px">';
@@ -1473,7 +1503,7 @@ window.addEventListener('pageshow',()=>{
         h+=`<button class="secondarybtn" type="button" onclick="startHistoryMistakeExam(${nextIdx})">🎯 Επόμενο πακέτο — Τεστ (${nextCount})</button>`;
       }
       if(historyNow===0)h+='<button class="primarybtn" type="button" onclick="closeExam()">🏁 Τέλος — μηδέν ιστορικά λάθη</button>';
-      h+='<button class="secondarybtn" type="button" onclick="closeExam();openHistoryMistakeBatches()">📚 Αναδιάταξη όσων απομένουν σε νέα 60άρια</button></div>';
+      h+='<button class="secondarybtn" type="button" onclick="closeExam();openHistoryMistakeBatches()">📚 Κλείσιμο & νέα 60άρια από όσα απομένουν</button></div>';
     }else{
       h+=`<div style="margin-top:18px"><button class="primarybtn" type="button" onclick="startExam(${exam.block})">↻ Νέο τεστ</button>`;
       if(pass){const next=exam.block*60+1;if(next<=600)h+=` <button class="secondarybtn" type="button" onclick="closeExam();document.getElementById('q${next}').scrollIntoView({behavior:'smooth'});">Συνέχισε στην ${next} →</button>`;else h+=' <button class="secondarybtn" type="button" onclick="closeExam()">Ολοκλήρωση</button>';}
@@ -1485,7 +1515,28 @@ window.addEventListener('pageshow',()=>{
   // Keep easy count fresh after study answers/tests.
   const oldUpdate=update;window.update=function(){oldUpdate();updateReviewUI();};
 
-  ensureState();injectChapterIntros();injectMasterGlossary();rewriteExplanations();addSOSPlusBadges();syncEasyButtons();addReviewTools();updateReviewUI();save();
+  function repairBrokenV27HistoryExamOnce(){
+    try{
+      const repairKey=STORAGE_KEY+'_v28_history_repair';
+      if(localStorage.getItem(repairKey))return;
+      const hx=(state.examHistory||[]).filter(h=>h&&h.mode==='history'&&!Array.isArray(h.questions));
+      const h=hx[hx.length-1];
+      const currentHistory=Object.keys(state.mistakeHistory||{}).map(Number).filter(n=>n>=1&&n<=600);
+      const union=[...new Set(currentHistory.concat(Object.keys(state.easy||{}).map(Number).filter(n=>n>=1&&n<=600)))].sort((a,b)=>a-b);
+      // Exact known v27 failure pattern: first historical batch, 193 initial, 59/60, menu stayed at 180.
+      if(ACTIVE_PROFILE==='thanasis'&&h&&Number(h.total)===60&&Number(h.correct)===59&&Array.isArray(h.wrong)&&h.wrong.length===1&&currentHistory.length===180&&union.length===193){
+        const wrongSet=new Set(h.wrong.map(Number));
+        const first60=union.slice(0,60);
+        first60.filter(n=>!wrongSet.has(n)).forEach(n=>{delete state.mistakeHistory[String(n)];delete state.mistakes[String(n)];});
+        sanitizeHistoryAgainstEasy();
+        save();
+        localStorage.setItem(repairKey,JSON.stringify({at:Date.now(),from:'v27-59-of-60',wrong:[...wrongSet]}));
+        setTimeout(()=>alert(`✅ Διορθώθηκε αυτόματα το τελευταίο 59/60 της v27. Οι σωστές του πρώτου πακέτου αφαιρέθηκαν από τα Ιστορικά. Απομένουν τώρα ${allHistoricalMistakeNums().length}.`),250);
+      }
+    }catch(e){}
+  }
+
+  ensureState();repairBrokenV27HistoryExamOnce();injectChapterIntros();injectMasterGlossary();rewriteExplanations();addSOSPlusBadges();syncEasyButtons();addReviewTools();updateReviewUI();save();
 })();
 </script>
 
@@ -1494,4 +1545,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-<div id="buildMarker" style="display:none">build-smart-study-v27-history-mastery-flow</div></body></html>
+<div id="buildMarker" style="display:none">build-smart-study-v28-history-mastered-queue</div></body></html>
