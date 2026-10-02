@@ -1,4 +1,4 @@
-<!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ασφαλιστικός Πράκτορας v27 — Κατάκτηση ιστορικών λαθών</title><style>
+<!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ασφαλιστικός Πράκτορας v29 — Ιστορικά λάθη</title><style>
 :root{
 --bg:#eef3f6;--card:#ffffff;--text:#173042;--muted:#657786;--line:#d5e0e7;
 --navy:#173b55;--navy2:#0f2b40;--teal:#2f7d7b;--teal2:#246765;
@@ -367,6 +367,19 @@ try{
     }
   }
 }catch(e){}
+function ensureState(){
+  // v29 core guard: these helpers live in the main script and must not depend on
+  // the later review-panel IIFE's private ensureState().
+  if(!state||typeof state!=='object')return;
+  if(!Array.isArray(state.passed))state.passed=[];
+  if(!Array.isArray(state.manualUnlocked))state.manualUnlocked=[];
+  if(!state.study||typeof state.study!=='object')state.study={};
+  if(!state.studyAttempts||typeof state.studyAttempts!=='object')state.studyAttempts={};
+  if(!state.mistakes||typeof state.mistakes!=='object')state.mistakes={};
+  if(!state.mistakeHistory||typeof state.mistakeHistory!=='object')state.mistakeHistory={};
+  if(!Array.isArray(state.examHistory))state.examHistory=[];
+  if(!state.easy||typeof state.easy!=='object')state.easy={};
+}
 function save(){
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -541,7 +554,7 @@ function historyMistakeBatches(){
 }
 function remainingHistoryBatchNums(index){
   ensureState();const batches=historyMistakeBatches(),src=batches[index]||[];
-  return src.filter(n=>!!state.mistakeHistory[String(n)]&&!isEasy(n));
+  return src.filter(n=>!!state.mistakeHistory[String(n)]&&!state.easy[String(n)]);
 }
 function nextNonEmptyHistoryBatchIndex(index){
   const batches=historyMistakeBatches();
@@ -630,7 +643,7 @@ function restoreStudy(){
   update();save();
   document.querySelectorAll('.checkpoint').forEach(cp=>refreshCheckpoint(parseInt(cp.dataset.block,10)));
 }
-function exportProgress(){const payload={app:'TtE Praktoras 2024',version:28,profile:ACTIVE_PROFILE,profileName:PROFILE_NAMES[ACTIVE_PROFILE],exportedAt:new Date().toISOString(),state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`TtE_Praktoras_${ACTIVE_PROFILE==='danae'?'Danae':'Thanasis'}_progress.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function exportProgress(){const payload={app:'TtE Praktoras 2024',version:29,profile:ACTIVE_PROFILE,profileName:PROFILE_NAMES[ACTIVE_PROFILE],exportedAt:new Date().toISOString(),state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`TtE_Praktoras_${ACTIVE_PROFILE==='danae'?'Danae':'Thanasis'}_progress.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function importProgress(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const s=p.state||p;if(!s||typeof s!=='object')throw new Error('invalid');state={passed:Array.isArray(s.passed)?s.passed:[],manualUnlocked:Array.isArray(s.manualUnlocked)?s.manualUnlocked:[],study:s.study||{},studyAttempts:(s.studyAttempts&&typeof s.studyAttempts==='object')?s.studyAttempts:{},mistakes:s.mistakes||{},mistakeHistory:(s.mistakeHistory&&typeof s.mistakeHistory==='object')?s.mistakeHistory:{},historyQueueV27Initialized:!!s.historyQueueV27Initialized,examHistory:Array.isArray(s.examHistory)?s.examHistory:[],easy:(s.easy&&typeof s.easy==='object')?s.easy:{},lastQuestion:clampQuestion(s.lastQuestion||1),lastQuestionTs:Number(s.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert(`Η πρόοδος εισήχθη στον χρήστη ${PROFILE_NAMES[ACTIVE_PROFILE]}. Θα γίνει ανανέωση.`);location.reload();}catch(e){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';}
 function checkpointUnlocked(block){
   const manual=Array.isArray(state.manualUnlocked)&&state.manualUnlocked.includes(block);
@@ -1308,7 +1321,7 @@ window.addEventListener('pageshow',()=>{
     e.preventDefault();e.stopPropagation();const nums=categoryNums(reviewMode);const cur=parseInt(card.dataset.q,10);const idx=nums.indexOf(cur);const target=a.classList.contains('prevlink')?nums[idx-1]:nums[idx+1];if(target){persistLastQuestion(target);scrollToQuestion(target);}
   },true);
 
-  // v28: mastery workflow. Fixed batch snapshot; opening History again rebuilds fresh 60s from remaining items.
+  // v29: mastery workflow; fixed global state guard so History button always opens. Fixed batch snapshot; opening History again rebuilds fresh 60s from remaining items.
   // Easy/correct items disappear from the queue; each group's test uses only what remains.
   window.renderHistoryBatchPanel=function(){
     ensureState();
@@ -1545,4 +1558,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-<div id="buildMarker" style="display:none">build-smart-study-v28-history-mastered-queue</div></body></html>
+<div id="buildMarker" style="display:none">build-smart-study-v29-history-button-fixed</div></body></html>
