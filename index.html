@@ -1,4 +1,4 @@
-<!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ασφαλιστικός Πράκτορας — Μελέτη + Τεστ 60</title><style>
+<!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ασφαλιστικός Πράκτορας v23 — Μελέτη + Τεστ 60</title><style>
 :root{
 --bg:#eef3f6;--card:#ffffff;--text:#173042;--muted:#657786;--line:#d5e0e7;
 --navy:#173b55;--navy2:#0f2b40;--teal:#2f7d7b;--teal2:#246765;
@@ -260,10 +260,31 @@ body.sos-only .compact-progress{grid-template-columns:1fr 1fr 1fr}
       </div>
     </div>
 
+    <div class="tool-row jump-row">
+      <label for="studyBlockSelect">Μετάβαση σε επιλεγμένο τεστ 60 ερωτήσεων</label>
+      <div class="jump compact-jump">
+        <select id="studyBlockSelect" aria-label="Επιλογή 60αριού" style="min-width:220px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--navy2);font-weight:750">
+          <option value="1">60άρι 1 — ερωτήσεις 1–60</option>
+          <option value="2">60άρι 2 — ερωτήσεις 61–120</option>
+          <option value="3">60άρι 3 — ερωτήσεις 121–180</option>
+          <option value="4">60άρι 4 — ερωτήσεις 181–240</option>
+          <option value="5">60άρι 5 — ερωτήσεις 241–300</option>
+          <option value="6">60άρι 6 — ερωτήσεις 301–360</option>
+          <option value="7">60άρι 7 — ερωτήσεις 361–420</option>
+          <option value="8">60άρι 8 — ερωτήσεις 421–480</option>
+          <option value="9">60άρι 9 — ερωτήσεις 481–540</option>
+          <option value="10">60άρι 10 — ερωτήσεις 541–600</option>
+        </select>
+        <button type="button" onclick="restartStudyBlock()">Μετάβαση / Ξεκίνα ξανά</button>
+      </div>
+      <div style="margin-top:7px;font-size:12px;color:var(--muted);line-height:1.4">Καθαρή επανάληψη: κρύβονται οι παλιές επιλογές μόνο από την οθόνη. Το ιστορικό απαντήσεων και όλα τα παλιά + νέα λάθη παραμένουν αποθηκευμένα ανά χρήστη.</div>
+    </div>
+
     <div class="tool-stats">
       <span class="tool-pill">✅ Σωστά <b id="okc">0</b></span>
       <span class="tool-pill">❌ Λάθη <b id="badc">0</b></span>
       <span class="tool-pill">🧠 Προς κατάκτηση <b id="mistakec">0</b></span>
+      <span class="tool-pill">📚 Ιστορικά λάθη <b id="historyMistakec">0</b></span>
       <span class="tool-pill">🎯 Ακρίβεια <b id="pct">0%</b></span>
       <span class="tool-pill goal">Checkpoint ≥94% = 57/60</span>
     </div>
@@ -308,7 +329,7 @@ const RESUME_COOKIE=`tte_praktoras_resume_v21_${ACTIVE_PROFILE}`;
 const IDB_NAME=`tte_praktoras_progress_v21_${ACTIVE_PROFILE}`;
 const IDB_STORE='kv';
 let ok=0,bad=0,seen={};
-let state={passed:[],manualUnlocked:[],study:{},mistakes:{},examHistory:[],easy:{},lastQuestion:1,lastQuestionTs:0};
+let state={passed:[],manualUnlocked:[],study:{},studyAttempts:{},mistakes:{},mistakeHistory:{},examHistory:[],easy:{},lastQuestion:1,lastQuestionTs:0};
 try{
   let raw=localStorage.getItem(STORAGE_KEY);
   if(!raw){raw=localStorage.getItem(OLD_STORAGE_KEY);}
@@ -321,12 +342,19 @@ try{
     state.passed=Array.isArray(s.passed)?s.passed:[];
     state.manualUnlocked=Array.isArray(s.manualUnlocked)?s.manualUnlocked:[];
     state.study=s.study||{};
+    state.studyAttempts=(s.studyAttempts&&typeof s.studyAttempts==='object')?s.studyAttempts:{};
     state.mistakes=s.mistakes||{};
+    state.mistakeHistory=(s.mistakeHistory&&typeof s.mistakeHistory==='object')?s.mistakeHistory:{};
     state.examHistory=Array.isArray(s.examHistory)?s.examHistory:[];
     state.easy=(s.easy&&typeof s.easy==='object')?s.easy:{};
     state.lastQuestion=Math.max(1,Math.min(600,parseInt(s.lastQuestion||1,10)||1));
     state.lastQuestionTs=Number(s.lastQuestionTs||0)||0;
     Object.entries(state.study).forEach(([n,v])=>{if(typeof v==='string'){state.study[n]={result:v,answer:null};if(v==='bad'&&!state.mistakes[n])state.mistakes[n]={count:1,last:Date.now(),source:'study'};}});
+    const legacyMistakes={};
+    Object.entries(state.mistakes||{}).forEach(([n,m])=>{legacyMistakes[n]={count:Number(m&&m.count||1)||1,last:Number(m&&m.last||0)||0,source:(m&&m.source)||'legacy-active'};});
+    (state.examHistory||[]).forEach(h=>{const ts=Date.parse(h&&h.date||'')||0;(Array.isArray(h&&h.wrong)?h.wrong:[]).forEach(n=>{const k=String(n),r=legacyMistakes[k]||{count:0,last:0,source:'legacy-exam'};r.count++;r.last=Math.max(r.last||0,ts);legacyMistakes[k]=r;});});
+    Object.entries(state.study||{}).forEach(([n,v])=>{const e=typeof v==='string'?{result:v,answer:null}:v;if(e&&e.result==='bad'){const r=legacyMistakes[n]||{count:0,last:0,source:'legacy-study'};r.count=Math.max(1,r.count||0);legacyMistakes[n]=r;}if(e&&e.answer&&!Array.isArray(state.studyAttempts[n]))state.studyAttempts[n]=[{answer:e.answer,result:e.result||null,ts:0,mode:'legacy'}];});
+    Object.entries(legacyMistakes).forEach(([n,m])=>{if(!state.mistakeHistory[n])state.mistakeHistory[n]={count:Math.max(1,Number(m.count||1)||1),last:Number(m.last||0)||0,source:m.source||'legacy'};});
   }
 }catch(e){}
 function save(){
@@ -459,8 +487,21 @@ function bestResumeRecord(extra){
   return candidates.sort((a,b)=>b.n-a.n)[0]||{n:1,ts:0};
 }
 
-function bumpMistake(n,source){const k=String(n);const cur=state.mistakes[k]||{count:0,last:0,source};cur.count=(cur.count||0)+1;cur.last=Date.now();cur.source=source;state.mistakes[k]=cur;}
+function bumpMistake(n,source){
+  const k=String(n),now=Date.now();
+  const cur=state.mistakes[k]||{count:0,last:0,source};cur.count=(cur.count||0)+1;cur.last=now;cur.source=source;state.mistakes[k]=cur;
+  if(!state.mistakeHistory||typeof state.mistakeHistory!=='object')state.mistakeHistory={};
+  const hist=state.mistakeHistory[k]||{count:0,last:0,source};hist.count=(hist.count||0)+1;hist.last=now;hist.source=source;state.mistakeHistory[k]=hist;
+}
 function masterMistake(n){delete state.mistakes[String(n)];}
+function recordStudyAttempt(n,answer,good,mode){
+  if(!state.studyAttempts||typeof state.studyAttempts!=='object')state.studyAttempts={};
+  const k=String(n),arr=Array.isArray(state.studyAttempts[k])?state.studyAttempts[k]:[];
+  arr.push({answer,result:good?'ok':'bad',ts:Date.now(),mode:mode||'study'});
+  state.studyAttempts[k]=arr.slice(-20);
+}
+let freshStudyBlock=null;
+let freshStudyPending=new Set();
 function studyProgressInfo(){
   const answered=new Set(
     Object.keys(state.study||{})
@@ -528,6 +569,7 @@ function update(){
   document.getElementById('okc').textContent=ok;
   document.getElementById('badc').textContent=bad;
   document.getElementById('mistakec').textContent=Object.keys(state.mistakes||{}).length;
+  const hc=document.getElementById('historyMistakec');if(hc)hc.textContent=Object.keys(state.mistakeHistory||{}).length;
   document.getElementById('pct').textContent=t?Math.round(ok*100/t)+'%':'0%';
   updateProgressBars();
 }
@@ -537,8 +579,8 @@ function restoreStudy(){
   update();save();
   document.querySelectorAll('.checkpoint').forEach(cp=>refreshCheckpoint(parseInt(cp.dataset.block,10)));
 }
-function exportProgress(){const payload={app:'TtE Praktoras 2024',version:22,profile:ACTIVE_PROFILE,profileName:PROFILE_NAMES[ACTIVE_PROFILE],exportedAt:new Date().toISOString(),state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`TtE_Praktoras_${ACTIVE_PROFILE==='danae'?'Danae':'Thanasis'}_progress.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function importProgress(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const s=p.state||p;if(!s||typeof s!=='object')throw new Error('invalid');state={passed:Array.isArray(s.passed)?s.passed:[],manualUnlocked:Array.isArray(s.manualUnlocked)?s.manualUnlocked:[],study:s.study||{},mistakes:s.mistakes||{},examHistory:Array.isArray(s.examHistory)?s.examHistory:[],easy:(s.easy&&typeof s.easy==='object')?s.easy:{},lastQuestion:clampQuestion(s.lastQuestion||1),lastQuestionTs:Number(s.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert(`Η πρόοδος εισήχθη στον χρήστη ${PROFILE_NAMES[ACTIVE_PROFILE]}. Θα γίνει ανανέωση.`);location.reload();}catch(e){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';}
+function exportProgress(){const payload={app:'TtE Praktoras 2024',version:23,profile:ACTIVE_PROFILE,profileName:PROFILE_NAMES[ACTIVE_PROFILE],exportedAt:new Date().toISOString(),state};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`TtE_Praktoras_${ACTIVE_PROFILE==='danae'?'Danae':'Thanasis'}_progress.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function importProgress(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const s=p.state||p;if(!s||typeof s!=='object')throw new Error('invalid');state={passed:Array.isArray(s.passed)?s.passed:[],manualUnlocked:Array.isArray(s.manualUnlocked)?s.manualUnlocked:[],study:s.study||{},studyAttempts:(s.studyAttempts&&typeof s.studyAttempts==='object')?s.studyAttempts:{},mistakes:s.mistakes||{},mistakeHistory:(s.mistakeHistory&&typeof s.mistakeHistory==='object')?s.mistakeHistory:{},examHistory:Array.isArray(s.examHistory)?s.examHistory:[],easy:(s.easy&&typeof s.easy==='object')?s.easy:{},lastQuestion:clampQuestion(s.lastQuestion||1),lastQuestionTs:Number(s.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert(`Η πρόοδος εισήχθη στον χρήστη ${PROFILE_NAMES[ACTIVE_PROFILE]}. Θα γίνει ανανέωση.`);location.reload();}catch(e){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';}
 function checkpointUnlocked(block){
   const manual=Array.isArray(state.manualUnlocked)&&state.manualUnlocked.includes(block);
   return state.passed.includes(block)||manual;
@@ -637,14 +679,48 @@ function toggleSOSFilter(){
 
 function goToQuestion(){let n=parseInt(document.getElementById('jump').value,10);n=Math.max(1,Math.min(600,n||1));const max=maxUnlocked();if(n>max){alert(`Η ερώτηση είναι σε κλειδωμένο 60άρι. Πέρασε το checkpoint ή πάτησε «Ξεκλείδωσε το επόμενο 60άρι» στο checkpoint μέχρι την ερώτηση ${max}.`);n=max;}if(isSOSMode()&&!SOS_SET.has(n))applySOSFilter(false,false);persistLastQuestion(n);let e=document.getElementById('q'+n);if(e)e.scrollIntoView({behavior:'smooth',block:'start'});toggleToolsPanel(false);}
 
+function restartStudyBlock(block){
+  const sel=document.getElementById('studyBlockSelect');
+  block=parseInt(block||sel&&sel.value||1,10);
+  block=Math.max(1,Math.min(10,block||1));
+  const start=(block-1)*60+1,end=block*60;
+  try{if(typeof window.setReviewFilter==='function')window.setReviewFilter('all',false);else if(isSOSMode())applySOSFilter(false,false);}catch(e){}
+  freshStudyBlock={block,start,end,startedAt:Date.now()};
+  freshStudyPending=new Set();
+  for(let n=start;n<=end;n++){
+    freshStudyPending.add(n);
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(input=>{input.checked=false;});
+  }
+  if(sel)sel.value=String(block);
+  persistLastQuestion(start);
+  toggleToolsPanel(false);
+  const el=document.getElementById('q'+start);
+  if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),80);
+}
+window.restartStudyBlock=restartStudyBlock;
+
 document.querySelectorAll('.choice').forEach(inp=>inp.addEventListener('change',()=>{
-  let sec=inp.closest('.qcard'),n=sec.dataset.q;const good=inp.value===sec.dataset.correct;
-  if(!seen[n]){seen[n]=1;if(good)ok++;else{bad++;bumpMistake(n,'study');}state.study[n]={result:good?'ok':'bad',answer:inp.value};}
-  else{const entry=state.study[n]||{};entry.answer=inp.value;state.study[n]=entry;}
-  persistLastQuestion(parseInt(n,10));update();
+  let sec=inp.closest('.qcard'),n=sec.dataset.q;const ni=parseInt(n,10),good=inp.value===sec.dataset.correct;
+  const fresh=freshStudyPending.has(ni);
+  if(fresh){
+    freshStudyPending.delete(ni);
+    const prev=state.study[n]||state.study[ni]||{};
+    const prevResult=typeof prev==='string'?prev:prev.result;
+    if(prevResult==='ok')ok=Math.max(0,ok-1);else if(prevResult==='bad')bad=Math.max(0,bad-1);
+    seen[n]=1;if(good)ok++;else{bad++;bumpMistake(ni,'study-retake');}
+    state.study[n]={result:good?'ok':'bad',answer:inp.value,lastAttemptAt:Date.now()};
+    recordStudyAttempt(ni,inp.value,good,'retake');
+  }else if(!seen[n]){
+    seen[n]=1;if(good)ok++;else{bad++;bumpMistake(ni,'study');}
+    state.study[n]={result:good?'ok':'bad',answer:inp.value,lastAttemptAt:Date.now()};
+    recordStudyAttempt(ni,inp.value,good,'study');
+  }else{
+    const entry=state.study[n]||{};entry.answer=inp.value;entry.lastAttemptAt=Date.now();state.study[n]=entry;
+  }
+  persistLastQuestion(ni);update();
   if(good){
-    const nn=parseInt(n,10)+1;
-    const nextId=(parseInt(n,10)%60===0)?'cp'+(parseInt(n,10)/60):'q'+nn;
+    const nn=ni+1;
+    const nextId=(ni%60===0)?'cp'+(ni/60):'q'+nn;
     if(nn<=600) persistLastQuestion(nn);
     const next=document.getElementById(nextId);if(next)setTimeout(()=>next.scrollIntoView({behavior:'smooth',block:'start'}),650);
   }
@@ -656,14 +732,14 @@ function shuffle(arr){let a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Ma
 function startExam(block){
   const end=block*60;
   const learned=QUESTIONS.filter(q=>q.n<=end);
-  let active=Object.entries(state.mistakes||{}).map(([n,m])=>({n:parseInt(n,10),count:m.count||1,last:m.last||0})).filter(x=>x.n<=end).sort((a,b)=>b.count-a.count||b.last-a.last);
+  let active=Object.entries((state.mistakeHistory&&typeof state.mistakeHistory==='object')?state.mistakeHistory:state.mistakes||{}).map(([n,m])=>({n:parseInt(n,10),count:m.count||1,last:m.last||0})).filter(x=>x.n<=end).sort((a,b)=>b.count-a.count||b.last-a.last);
   const forcedNums=active.slice(0,60).map(x=>x.n);
   const forced=forcedNums.map(n=>QBYN[n]).filter(Boolean);
   const forcedSet=new Set(forcedNums);
   const rest=shuffle(learned.filter(q=>!forcedSet.has(q.n))).slice(0,Math.max(0,60-forced.length));
   exam={block,qs:shuffle(forced.concat(rest)),idx:0,answers:{},submitted:false,forced:new Set(forcedNums)};
   document.getElementById('examTitle').textContent=`Checkpoint ${block}: Ύλη 1–${end}`;
-  document.getElementById('examMeta').textContent=`60 ερωτήσεις • ${forced.length} ενεργά λάθη μπήκαν υποχρεωτικά • χωρίς feedback μέχρι την υποβολή • στόχος ≥94%`;
+  document.getElementById('examMeta').textContent=`60 ερωτήσεις • ${forced.length} παλιά + νέα λάθη μπήκαν υποχρεωτικά • χωρίς feedback μέχρι την υποβολή • στόχος ≥94%`;
   document.getElementById('examTake').style.display='block';
   document.getElementById('examResult').style.display='none';
   document.getElementById('examOverlay').classList.add('open');document.getElementById('examOverlay').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
@@ -1062,6 +1138,13 @@ window.addEventListener('pageshow',()=>{
       }catch(e){}
       state.easy=recovered;
     }
+    if(!state.mistakeHistory||typeof state.mistakeHistory!=='object')state.mistakeHistory={};
+    const recoveredHistory={};
+    Object.entries(state.mistakes||{}).forEach(([n,m])=>{recoveredHistory[n]={count:Number(m&&m.count||1)||1,last:Number(m&&m.last||0)||0,source:(m&&m.source)||'legacy-active'};});
+    (state.examHistory||[]).forEach(h=>{const ts=Date.parse(h&&h.date||'')||0;(Array.isArray(h&&h.wrong)?h.wrong:[]).forEach(n=>{const k=String(n),r=recoveredHistory[k]||{count:0,last:0,source:'legacy-exam'};r.count++;r.last=Math.max(r.last||0,ts);recoveredHistory[k]=r;});});
+    if(!state.studyAttempts||typeof state.studyAttempts!=='object')state.studyAttempts={};
+    Object.entries(state.study||{}).forEach(([n,v])=>{const e=typeof v==='string'?{result:v,answer:null}:v;if(e&&e.result==='bad'){const r=recoveredHistory[n]||{count:0,last:0,source:'legacy-study'};r.count=Math.max(1,r.count||0);recoveredHistory[n]=r;}if(e&&e.answer&&!Array.isArray(state.studyAttempts[n]))state.studyAttempts[n]=[{answer:e.answer,result:e.result||null,ts:0,mode:'legacy'}];});
+    Object.entries(recoveredHistory).forEach(([n,m])=>{if(!state.mistakeHistory[n])state.mistakeHistory[n]={count:Math.max(1,Number(m.count||1)||1),last:Number(m.last||0)||0,source:m.source||'legacy'};});
   }
 
   function isEasy(n){ensureState();return !!state.easy[String(n)];}
@@ -1142,16 +1225,16 @@ window.addEventListener('pageshow',()=>{
   },true);
 
   // Import progress including Easy flags (backward compatible with older JSON exports).
-  window.importProgress=function(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const x=p.state||p;if(!x||typeof x!=='object')throw new Error('invalid');state={passed:Array.isArray(x.passed)?x.passed:[],manualUnlocked:Array.isArray(x.manualUnlocked)?x.manualUnlocked:[],study:x.study||{},mistakes:x.mistakes||{},easy:x.easy||{},examHistory:Array.isArray(x.examHistory)?x.examHistory:[],lastQuestion:clampQuestion(x.lastQuestion||1),lastQuestionTs:Number(x.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert('Η πρόοδος εισήχθη. Θα γίνει ανανέωση.');location.reload();}catch(err){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';};
+  window.importProgress=function(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const x=p.state||p;if(!x||typeof x!=='object')throw new Error('invalid');state={passed:Array.isArray(x.passed)?x.passed:[],manualUnlocked:Array.isArray(x.manualUnlocked)?x.manualUnlocked:[],study:x.study||{},studyAttempts:(x.studyAttempts&&typeof x.studyAttempts==='object')?x.studyAttempts:{},mistakes:x.mistakes||{},mistakeHistory:(x.mistakeHistory&&typeof x.mistakeHistory==='object')?x.mistakeHistory:{},easy:x.easy||{},examHistory:Array.isArray(x.examHistory)?x.examHistory:[],lastQuestion:clampQuestion(x.lastQuestion||1),lastQuestionTs:Number(x.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert('Η πρόοδος εισήχθη. Θα γίνει ανανέωση.');location.reload();}catch(err){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';};
 
   // Checkpoint tests: Easy questions are excluded. Test size becomes up to 60 non-easy questions.
   window.startExam=function(block){
     ensureState();const end=block*60;const learned=QUESTIONS.filter(q=>q.n<=end&&!isEasy(q.n));const size=Math.min(60,learned.length);
     if(size<1){alert('Όλες οι διαθέσιμες ερωτήσεις έχουν σημειωθεί ως Εύκολες. Αφαίρεσε το ✅ Εύκολη από μερικές για να δημιουργηθεί τεστ.');return;}
-    let active=Object.entries(state.mistakes||{}).map(([n,m])=>({n:parseInt(n,10),count:m.count||1,last:m.last||0})).filter(x=>x.n<=end&&!isEasy(x.n)).sort((a,b)=>b.count-a.count||b.last-a.last);
+    let active=Object.entries((state.mistakeHistory&&typeof state.mistakeHistory==='object')?state.mistakeHistory:state.mistakes||{}).map(([n,m])=>({n:parseInt(n,10),count:m.count||1,last:m.last||0})).filter(x=>x.n<=end&&!isEasy(x.n)).sort((a,b)=>b.count-a.count||b.last-a.last);
     const forcedNums=active.slice(0,size).map(x=>x.n);const forced=forcedNums.map(n=>QBYN[n]).filter(Boolean);const forcedSet=new Set(forcedNums);const rest=shuffle(learned.filter(q=>!forcedSet.has(q.n))).slice(0,Math.max(0,size-forced.length));
     exam={block,qs:shuffle(forced.concat(rest)),idx:0,answers:{},submitted:false,forced:new Set(forcedNums),size};
-    document.getElementById('examTitle').textContent=`Checkpoint ${block}: Ύλη 1–${end}`;document.getElementById('examMeta').textContent=`${size} ερωτήσεις • οι ✅ Εύκολες εξαιρέθηκαν • ${forced.length} ενεργά λάθη μπήκαν υποχρεωτικά • στόχος ≥94%`;
+    document.getElementById('examTitle').textContent=`Checkpoint ${block}: Ύλη 1–${end}`;document.getElementById('examMeta').textContent=`${size} ερωτήσεις • οι ✅ Εύκολες εξαιρέθηκαν • ${forced.length} παλιά + νέα λάθη μπήκαν υποχρεωτικά • στόχος ≥94%`;
     document.getElementById('examTake').style.display='block';document.getElementById('examResult').style.display='none';document.getElementById('examOverlay').classList.add('open');document.getElementById('examOverlay').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';renderExam();
   };
   window.renderExam=function(){
@@ -1182,4 +1265,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-<div id="buildMarker" style="display:none">build-smart-study-v22-full-explanations-multiuser</div></body></html>
+<div id="buildMarker" style="display:none">build-smart-study-v23-selected-60-retake-history</div></body></html>
