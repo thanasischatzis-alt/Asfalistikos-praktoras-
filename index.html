@@ -332,7 +332,7 @@ const RESUME_COOKIE=`tte_praktoras_resume_v21_${ACTIVE_PROFILE}`;
 const IDB_NAME=`tte_praktoras_progress_v21_${ACTIVE_PROFILE}`;
 const IDB_STORE='kv';
 let ok=0,bad=0,seen={};
-let state={passed:[],manualUnlocked:[],study:{},studyAttempts:{},mistakes:{},mistakeHistory:{},historyQueueV27Initialized:false,examHistory:[],easy:{},lastQuestion:1,lastQuestionTs:0};
+let state={passed:[],manualUnlocked:[],study:{},studyAttempts:{},mistakes:{},mistakeHistory:{},historyMastered:{},historyQueueV27Initialized:false,historyQueueV30Initialized:false,examHistory:[],easy:{},lastQuestion:1,lastQuestionTs:0};
 try{
   let raw=localStorage.getItem(STORAGE_KEY);
   if(!raw){raw=localStorage.getItem(OLD_STORAGE_KEY);}
@@ -348,7 +348,9 @@ try{
     state.studyAttempts=(s.studyAttempts&&typeof s.studyAttempts==='object')?s.studyAttempts:{};
     state.mistakes=s.mistakes||{};
     state.mistakeHistory=(s.mistakeHistory&&typeof s.mistakeHistory==='object')?s.mistakeHistory:{};
+    state.historyMastered=(s.historyMastered&&typeof s.historyMastered==='object')?s.historyMastered:{};
     state.historyQueueV27Initialized=!!s.historyQueueV27Initialized;
+    state.historyQueueV30Initialized=!!s.historyQueueV30Initialized;
     state.examHistory=Array.isArray(s.examHistory)?s.examHistory:[];
     state.easy=(s.easy&&typeof s.easy==='object')?s.easy:{};
     state.lastQuestion=Math.max(1,Math.min(600,parseInt(s.lastQuestion||1,10)||1));
@@ -368,7 +370,7 @@ try{
   }
 }catch(e){}
 function ensureState(){
-  // v29 core guard: these helpers live in the main script and must not depend on
+  // v30 core guard: these helpers live in the main script and must not depend on
   // the later review-panel IIFE's private ensureState().
   if(!state||typeof state!=='object')return;
   if(!Array.isArray(state.passed))state.passed=[];
@@ -377,9 +379,76 @@ function ensureState(){
   if(!state.studyAttempts||typeof state.studyAttempts!=='object')state.studyAttempts={};
   if(!state.mistakes||typeof state.mistakes!=='object')state.mistakes={};
   if(!state.mistakeHistory||typeof state.mistakeHistory!=='object')state.mistakeHistory={};
+  if(!state.historyMastered||typeof state.historyMastered!=='object')state.historyMastered={};
+  if(typeof state.historyQueueV30Initialized!=='boolean')state.historyQueueV30Initialized=false;
   if(!Array.isArray(state.examHistory))state.examHistory=[];
   if(!state.easy||typeof state.easy!=='object')state.easy={};
 }
+
+function _v30MergeWrongEvidence(target,obj,sourceTag){
+  if(!obj||typeof obj!=='object')return;
+  const add=(n,m,src)=>{n=parseInt(n,10);if(!(n>=1&&n<=600))return;const k=String(n),cur=target[k]||{count:0,last:0,source:src||sourceTag||'recovered'};cur.count=Math.max(cur.count||0,Number(m&&m.count||1)||1);cur.last=Math.max(cur.last||0,Number(m&&m.last||0)||0);cur.source=cur.source||src||sourceTag||'recovered';target[k]=cur;};
+  Object.entries(obj.mistakeHistory||{}).forEach(([n,m])=>add(n,m,'history'));
+  Object.entries(obj.mistakes||{}).forEach(([n,m])=>add(n,m,'active'));
+  Object.entries(obj.study||{}).forEach(([n,v])=>{const e=typeof v==='string'?{result:v}:v;if(e&&e.result==='bad')add(n,{count:1,last:0},'study');});
+  Object.entries(obj.studyAttempts||{}).forEach(([n,arr])=>{if(Array.isArray(arr)&&arr.some(a=>a&&a.result==='bad'))add(n,{count:arr.filter(a=>a&&a.result==='bad').length,last:Math.max(0,...arr.map(a=>Number(a&&a.ts||0)||0))},'study-attempt');});
+  (Array.isArray(obj.examHistory)?obj.examHistory:[]).forEach(h=>{const ts=Date.parse(h&&h.date||'')||0;(Array.isArray(h&&h.wrong)?h.wrong:[]).forEach(n=>add(n,{count:1,last:ts},'exam'));});
+}
+function _v30ReadCandidateStates(){
+  const out=[state],seen=new Set();
+  const keys=[STORAGE_KEY,OLD_STORAGE_KEY,LEGACY_STORAGE_KEY,LEGACY_OLD_STORAGE_KEY,`tte_praktoras_2024_checkpoint_v21_${ACTIVE_PROFILE}`,`tte_praktoras_2024_checkpoint_v20_${ACTIVE_PROFILE}`];
+  keys.forEach(k=>{if(!k||seen.has(k))return;seen.add(k);try{const raw=localStorage.getItem(k);if(!raw)return;const o=JSON.parse(raw);if(o&&typeof o==='object')out.push(o.state&&typeof o.state==='object'?o.state:o);}catch(e){}});
+  return out;
+}
+function repairHistoricalMistakesV30(){
+  try{
+    ensureState();
+    if(state.historyQueueV30Initialized)return false;
+    const before=Object.keys(state.mistakeHistory||{}).length;
+    const evidence={};
+    const sources=_v30ReadCandidateStates();
+    sources.forEach((o,i)=>_v30MergeWrongEvidence(evidence,o,'storage-'+i));
+
+    // Collect explicit mastery from all newer history tests and from any prior v30 state.
+    const mastered=new Set(Object.keys(state.historyMastered||{}));
+    const historyExams=[];
+    sources.forEach(o=>(Array.isArray(o.examHistory)?o.examHistory:[]).forEach(h=>{if(h&&h.mode==='history')historyExams.push(h);}));
+    historyExams.sort((a,b)=>(Date.parse(a.date||'')||0)-(Date.parse(b.date||'')||0));
+    historyExams.forEach(h=>{
+      const wrong=new Set((Array.isArray(h.wrong)?h.wrong:[]).map(Number));
+      if(Array.isArray(h.correctQuestions))h.correctQuestions.forEach(n=>mastered.add(String(n)));
+      else if(Array.isArray(h.questions))h.questions.map(Number).filter(n=>!wrong.has(n)).forEach(n=>mastered.add(String(n)));
+    });
+
+    // Legacy v27 history tests did not save the question list. Infer their fixed 60-block
+    // from the sorted historical universe; this is exactly how those batches were built.
+    const universe=Object.keys(evidence).map(Number).filter(n=>n>=1&&n<=600).sort((a,b)=>a-b);
+    historyExams.forEach(h=>{
+      if(Array.isArray(h.correctQuestions)||Array.isArray(h.questions))return;
+      const total=Math.max(0,Number(h.total||0)||0);if(!total)return;
+      const bi=Number.isInteger(h.historyBatchIndex)?h.historyBatchIndex:0;
+      const start=Math.max(0,bi*60),candidate=universe.slice(start,start+total);
+      const wrong=new Set((Array.isArray(h.wrong)?h.wrong:[]).map(Number));
+      candidate.filter(n=>!wrong.has(n)).forEach(n=>mastered.add(String(n)));
+    });
+
+    const easySet=new Set(Object.keys(state.easy||{}));
+    const desired={};
+    Object.entries(evidence).forEach(([k,m])=>{if(!easySet.has(k)&&!mastered.has(k))desired[k]={count:Math.max(1,Number(m&&m.count||1)||1),last:Number(m&&m.last||0)||0,source:(m&&m.source)||'v30-recovered'};});
+
+    // Protect the user's current state before the one-time repair.
+    try{if(!localStorage.getItem(STORAGE_KEY+'_v30_pre_repair_backup'))localStorage.setItem(STORAGE_KEY+'_v30_pre_repair_backup',JSON.stringify(state));}catch(e){}
+    state.historyMastered={};mastered.forEach(k=>{state.historyMastered[k]={at:Date.now(),reason:'recovered-history-test'};});
+    // Only replace if history is empty/broken, otherwise preserve the current queue and just record mastery.
+    if(before===0&&Object.keys(desired).length>0)state.mistakeHistory=desired;
+    state.historyQueueV30Initialized=true;
+    save();
+    const after=Object.keys(state.mistakeHistory||{}).length;
+    if(before===0&&after>0)setTimeout(()=>alert(`✅ Επαναφέρθηκαν ${after} ιστορικά λάθη από τα αποθηκευμένα στοιχεία σου. Οι ✅ Εύκολες και οι σωστές απαντήσεις από τεστ ιστορικών λαθών έμειναν εκτός.`),200);
+    return after!==before;
+  }catch(e){return false;}
+}
+
 function save(){
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -513,12 +582,20 @@ function bestResumeRecord(extra){
 function bumpMistake(n,source){
   const k=String(n),now=Date.now();
   if(state.easy&&state.easy[k])delete state.easy[k];
+  if(state.historyMastered&&state.historyMastered[k])delete state.historyMastered[k];
   const cur=state.mistakes[k]||{count:0,last:0,source};cur.count=(cur.count||0)+1;cur.last=now;cur.source=source;state.mistakes[k]=cur;
   if(!state.mistakeHistory||typeof state.mistakeHistory!=='object')state.mistakeHistory={};
   const hist=state.mistakeHistory[k]||{count:0,last:0,source};hist.count=(hist.count||0)+1;hist.last=now;hist.source=source;state.mistakeHistory[k]=hist;
 }
 function masterMistake(n){delete state.mistakes[String(n)];}
-function masterHistoryMistake(n){const k=String(n);delete state.mistakeHistory[k];delete state.mistakes[k];}
+function masterHistoryMistake(n,reason){
+  const k=String(n);delete state.mistakeHistory[k];delete state.mistakes[k];
+  if(reason){
+    if(!state.historyMastered||typeof state.historyMastered!=='object')state.historyMastered={};
+    state.historyMastered[k]={at:Date.now(),reason:String(reason)};
+  }
+}
+function removeHistoryForEasy(n){const k=String(n);delete state.mistakeHistory[k];delete state.mistakes[k];}
 function recordStudyAttempt(n,answer,good,mode){
   if(!state.studyAttempts||typeof state.studyAttempts!=='object')state.studyAttempts={};
   const k=String(n),arr=Array.isArray(state.studyAttempts[k])?state.studyAttempts[k]:[];
@@ -1231,7 +1308,7 @@ window.addEventListener('pageshow',()=>{
       const priorHistory=state.mistakeHistory[k]?Object.assign({},state.mistakeHistory[k]):null;
       const priorMistake=state.mistakes[k]?Object.assign({},state.mistakes[k]):null;
       state.easy[k]={markedAt:Date.now(),source:'manual',priorHistory,priorMistake};
-      masterHistoryMistake(n);
+      removeHistoryForEasy(n);
     }else{
       const oldEasy=state.easy[k]||{};delete state.easy[k];
       if(oldEasy.source==='manual'&&oldEasy.priorHistory)state.mistakeHistory[k]=oldEasy.priorHistory;
@@ -1279,7 +1356,7 @@ window.addEventListener('pageshow',()=>{
   function addReviewTools(){
     const panel=document.getElementById('toolsPanel');if(!panel||document.getElementById('reviewToolsV17'))return;
     const d=document.createElement('div');d.className='review-tools';d.id='reviewToolsV17';
-    d.innerHTML=`<div class="review-title">Γρήγορη επανάληψη</div><div class="review-buttons"><button class="review-btn" data-review="all" onclick="setReviewFilter('all')">Όλες</button><button class="review-btn" data-review="sosplus" onclick="setReviewFilter('sosplus')">🔴 SOS+ <span id="sosPlusCount"></span></button><button class="review-btn" data-review="sos" onclick="setReviewFilter('sos')">🟠 SOS <span id="sosCountV17"></span></button><button class="review-btn" data-review="mistakes" onclick="setReviewFilter('mistakes')">🧠 Προς κατάκτηση <span id="mistakesCountV17"></span></button><button class="review-btn" data-review="history" onclick="openHistoryMistakeBatches()">📚 Όλα τα ιστορικά λάθη <span id="historyMistakesCountV25"></span></button><button class="review-btn" data-review="easy" onclick="setReviewFilter('easy')">✅ Εύκολες <span id="easyCountV17"></span></button><button class="review-btn" onclick="goCurrentGlossary()">📘 Λεξιλόγιο ενότητας</button><button class="review-btn" onclick="goMasterGlossary()">📚 Όλοι οι όροι</button></div><div id="historyBatchPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft)"></div><div class="review-note">📚 Ιστορικά λάθη = η ενεργή λίστα βελτίωσης. Χωρίζεται σε πακέτα έως 60: π.χ. 193 → 60 + 60 + 60 + 13. Στην <b>Καθαρή Μελέτη</b>, το ✅ Εύκολη αφαιρεί την ερώτηση αμέσως από τα Ιστορικά και από το επόμενο τεστ. Στο <b>Τεστ</b> μπαίνουν μόνο όσα απέμειναν, και κάθε σωστή απάντηση αφαιρείται οριστικά από τα Ιστορικά. Έτσι στο τέλος μένουν μόνο όσα χρειάζονται ξανά.</div>`;
+    d.innerHTML=`<div class="review-title">Γρήγορη επανάληψη</div><div class="review-buttons"><button class="review-btn" data-review="all" onclick="setReviewFilter('all')">Όλες</button><button class="review-btn" data-review="sosplus" onclick="setReviewFilter('sosplus')">🔴 SOS+ <span id="sosPlusCount"></span></button><button class="review-btn" data-review="sos" onclick="setReviewFilter('sos')">🟠 SOS <span id="sosCountV17"></span></button><button class="review-btn" data-review="mistakes" onclick="setReviewFilter('mistakes')">🧠 Προς κατάκτηση <span id="mistakesCountV17"></span></button><button class="review-btn" data-review="history" onclick="openHistoryMistakeBatches()">📚 Όλα τα ιστορικά λάθη <span id="historyMistakesCountV25"></span></button><button class="review-btn" type="button" onclick="state.historyQueueV30Initialized=false;repairHistoricalMistakesV30();updateReviewUI();update();openHistoryMistakeBatches()">🔧 Επαναφορά ιστορικών</button><button class="review-btn" data-review="easy" onclick="setReviewFilter('easy')">✅ Εύκολες <span id="easyCountV17"></span></button><button class="review-btn" onclick="goCurrentGlossary()">📘 Λεξιλόγιο ενότητας</button><button class="review-btn" onclick="goMasterGlossary()">📚 Όλοι οι όροι</button></div><div id="historyBatchPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft)"></div><div class="review-note">📚 Ιστορικά λάθη = η ενεργή λίστα βελτίωσης. Χωρίζεται σε πακέτα έως 60: π.χ. 193 → 60 + 60 + 60 + 13. Στην <b>Καθαρή Μελέτη</b>, το ✅ Εύκολη αφαιρεί την ερώτηση αμέσως από τα Ιστορικά και από το επόμενο τεστ. Στο <b>Τεστ</b> μπαίνουν μόνο όσα απέμειναν, και κάθε σωστή απάντηση αφαιρείται οριστικά από τα Ιστορικά. Έτσι στο τέλος μένουν μόνο όσα χρειάζονται ξανά.</div>`;
     panel.appendChild(d);updateReviewUI();
   }
 
@@ -1393,7 +1470,7 @@ window.addEventListener('pageshow',()=>{
   };
 
   // Import progress including Easy flags (backward compatible with older JSON exports).
-  window.importProgress=function(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const x=p.state||p;if(!x||typeof x!=='object')throw new Error('invalid');state={passed:Array.isArray(x.passed)?x.passed:[],manualUnlocked:Array.isArray(x.manualUnlocked)?x.manualUnlocked:[],study:x.study||{},studyAttempts:(x.studyAttempts&&typeof x.studyAttempts==='object')?x.studyAttempts:{},mistakes:x.mistakes||{},mistakeHistory:(x.mistakeHistory&&typeof x.mistakeHistory==='object')?x.mistakeHistory:{},historyQueueV27Initialized:!!x.historyQueueV27Initialized,easy:x.easy||{},examHistory:Array.isArray(x.examHistory)?x.examHistory:[],lastQuestion:clampQuestion(x.lastQuestion||1),lastQuestionTs:Number(x.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert('Η πρόοδος εισήχθη. Θα γίνει ανανέωση.');location.reload();}catch(err){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';};
+  window.importProgress=function(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);const x=p.state||p;if(!x||typeof x!=='object')throw new Error('invalid');state={passed:Array.isArray(x.passed)?x.passed:[],manualUnlocked:Array.isArray(x.manualUnlocked)?x.manualUnlocked:[],study:x.study||{},studyAttempts:(x.studyAttempts&&typeof x.studyAttempts==='object')?x.studyAttempts:{},mistakes:x.mistakes||{},mistakeHistory:(x.mistakeHistory&&typeof x.mistakeHistory==='object')?x.mistakeHistory:{},historyMastered:(x.historyMastered&&typeof x.historyMastered==='object')?x.historyMastered:{},historyQueueV27Initialized:!!x.historyQueueV27Initialized,historyQueueV30Initialized:!!x.historyQueueV30Initialized,easy:x.easy||{},examHistory:Array.isArray(x.examHistory)?x.examHistory:[],lastQuestion:clampQuestion(x.lastQuestion||1),lastQuestionTs:Number(x.lastQuestionTs||Date.now())||Date.now()};persistLastQuestion(state.lastQuestion,state.lastQuestionTs);alert('Η πρόοδος εισήχθη. Θα γίνει ανανέωση.');location.reload();}catch(err){alert('Το αρχείο προόδου δεν είναι έγκυρο.');}};r.readAsText(f);ev.target.value='';};
 
   window.startHistoryMistakeExam=function(batchIndex){
     ensureState();
@@ -1470,8 +1547,7 @@ window.addEventListener('pageshow',()=>{
       if(a===q.correct){
         correct++;correctNums.push(q.n);
         if(isHistoryExam){
-          delete state.mistakeHistory[k];
-          delete state.mistakes[k];
+          masterHistoryMistake(q.n,'history-test-correct');
         }else if(state.mistakes[k])masterMistake(q.n);
         if(!isHistoryExam&&easyCandidates.has(q.n)){
           state.easy[k]={markedAt:Date.now(),source:'exam-correct'};
@@ -1485,7 +1561,7 @@ window.addEventListener('pageshow',()=>{
     });
     if(isHistoryExam){
       // Hard post-condition: every correct historical-test answer is gone; every wrong answer remains.
-      correctNums.forEach(n=>{const k=String(n);delete state.mistakeHistory[k];delete state.mistakes[k];});
+      correctNums.forEach(n=>masterHistoryMistake(n,'history-test-correct'));
       wrong.forEach(({q})=>{const k=String(q.n);if(!state.mistakeHistory[k])state.mistakeHistory[k]={count:1,last:Date.now(),source:'history-exam'};});
       sanitizeHistoryAgainstEasy();
     }
@@ -1549,7 +1625,7 @@ window.addEventListener('pageshow',()=>{
     }catch(e){}
   }
 
-  ensureState();repairBrokenV27HistoryExamOnce();injectChapterIntros();injectMasterGlossary();rewriteExplanations();addSOSPlusBadges();syncEasyButtons();addReviewTools();updateReviewUI();save();
+  ensureState();repairHistoricalMistakesV30();repairBrokenV27HistoryExamOnce();injectChapterIntros();injectMasterGlossary();rewriteExplanations();addSOSPlusBadges();syncEasyButtons();addReviewTools();updateReviewUI();save();
 })();
 </script>
 
@@ -1558,4 +1634,4 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 }
 </script>
-<div id="buildMarker" style="display:none">build-smart-study-v29-history-button-fixed</div></body></html>
+<div id="buildMarker" style="display:none">build-smart-study-v30-history-recovery-fixed</div></body></html>
